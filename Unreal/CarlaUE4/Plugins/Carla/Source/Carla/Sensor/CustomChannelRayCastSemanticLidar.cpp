@@ -8,7 +8,7 @@
 #include <cmath>
 #include "Carla.h"
 #include "Carla/Actor/ActorBlueprintFunctionLibrary.h"
-#include "Carla/Sensor/RayCastSemanticLidar.h"
+#include "Carla/Sensor/CustomChannelRayCastSemanticLidar.h"
 
 #include <compiler/disable-ue4-macros.h>
 #include "carla/geom/Math.h"
@@ -21,18 +21,18 @@
 
 namespace crp = carla::rpc;
 
-FActorDefinition ARayCastSemanticLidar::GetSensorDefinition()
+FActorDefinition ACustomChannelRayCastSemanticLidar::GetSensorDefinition()
 {
-  return UActorBlueprintFunctionLibrary::MakeLidarDefinition(TEXT("ray_cast_semantic"));
+  return UActorBlueprintFunctionLibrary::MakeLidarDefinition(TEXT("ray_cast_semantic_custom_channels"));
 }
 
-ARayCastSemanticLidar::ARayCastSemanticLidar(const FObjectInitializer& ObjectInitializer)
+ACustomChannelRayCastSemanticLidar::ACustomChannelRayCastSemanticLidar(const FObjectInitializer& ObjectInitializer)
   : Super(ObjectInitializer)
 {
   PrimaryActorTick.bCanEverTick = true;
 }
 
-void ARayCastSemanticLidar::Set(const FActorDescription &ActorDescription)
+void ACustomChannelRayCastSemanticLidar::Set(const FActorDescription &ActorDescription)
 {
   Super::Set(ActorDescription);
   FLidarDescription LidarDescription;
@@ -40,7 +40,7 @@ void ARayCastSemanticLidar::Set(const FActorDescription &ActorDescription)
   Set(LidarDescription);
 }
 
-void ARayCastSemanticLidar::Set(const FLidarDescription &LidarDescription)
+void ACustomChannelRayCastSemanticLidar::Set(const FLidarDescription &LidarDescription)
 {
   Description = LidarDescription;
   SemanticLidarData = FSemanticLidarData(Description.Channels);
@@ -48,7 +48,7 @@ void ARayCastSemanticLidar::Set(const FLidarDescription &LidarDescription)
   PointsPerChannel.resize(Description.Channels);
 }
 
-void ARayCastSemanticLidar::CreateLasers()
+void ACustomChannelRayCastSemanticLidar::CreateLasers()
 {
   const auto NumberOfLasers = Description.Channels;
   check(NumberOfLasers > 0u);
@@ -68,7 +68,7 @@ void ARayCastSemanticLidar::CreateLasers()
   }
 }
 
-void ARayCastSemanticLidar::PostPhysTick(UWorld *World, ELevelTick TickType, float DeltaTime)
+void ACustomChannelRayCastSemanticLidar::PostPhysTick(UWorld *World, ELevelTick TickType, float DeltaTime)
 {
   SimulateLidar(DeltaTime);
 
@@ -76,7 +76,7 @@ void ARayCastSemanticLidar::PostPhysTick(UWorld *World, ELevelTick TickType, flo
   DataStream.Send(*this, SemanticLidarData, DataStream.PopBufferFromPool());
 }
 
-void ARayCastSemanticLidar::SimulateLidar(const float DeltaTime)
+void ACustomChannelRayCastSemanticLidar::SimulateLidar(const float DeltaTime)
 {
   const uint32 ChannelCount = Description.Channels;
   const uint32 PointsToScanWithOneLaser =
@@ -128,7 +128,7 @@ void ARayCastSemanticLidar::SimulateLidar(const float DeltaTime)
   SemanticLidarData.SetHorizontalAngle(HorizontalAngle);
 }
 
-void ARayCastSemanticLidar::ResetRecordedHits(uint32_t Channels, uint32_t MaxPointsPerChannel) {
+void ACustomChannelRayCastSemanticLidar::ResetRecordedHits(uint32_t Channels, uint32_t MaxPointsPerChannel) {
   RecordedHits.resize(Channels);
 
   for (auto& hits : RecordedHits) {
@@ -137,7 +137,7 @@ void ARayCastSemanticLidar::ResetRecordedHits(uint32_t Channels, uint32_t MaxPoi
   }
 }
 
-void ARayCastSemanticLidar::PreprocessRays(uint32_t Channels, uint32_t MaxPointsPerChannel) {
+void ACustomChannelRayCastSemanticLidar::PreprocessRays(uint32_t Channels, uint32_t MaxPointsPerChannel) {
   RayPreprocessCondition.resize(Channels);
 
   for (auto& conds : RayPreprocessCondition) {
@@ -147,12 +147,12 @@ void ARayCastSemanticLidar::PreprocessRays(uint32_t Channels, uint32_t MaxPoints
   }
 }
 
-void ARayCastSemanticLidar::WritePointAsync(uint32_t channel, FHitResult &detection) {
+void ACustomChannelRayCastSemanticLidar::WritePointAsync(uint32_t channel, FHitResult &detection) {
   DEBUG_ASSERT(GetChannelCount() > channel);
   RecordedHits[channel].emplace_back(detection);
 }
 
-void ARayCastSemanticLidar::ComputeAndSaveDetections(const FTransform& SensorTransform) {
+void ACustomChannelRayCastSemanticLidar::ComputeAndSaveDetections(const FTransform& SensorTransform) {
   for (auto idxChannel = 0u; idxChannel < Description.Channels; ++idxChannel)
     PointsPerChannel[idxChannel] = RecordedHits[idxChannel].size();
   SemanticLidarData.ResetSerPoints(PointsPerChannel);
@@ -166,7 +166,7 @@ void ARayCastSemanticLidar::ComputeAndSaveDetections(const FTransform& SensorTra
   }
 }
 
-void ARayCastSemanticLidar::ComputeRawDetection(const FHitResult& HitInfo, const FTransform& SensorTransf, FSemanticDetection& Detection) const
+void ACustomChannelRayCastSemanticLidar::ComputeRawDetection(const FHitResult& HitInfo, const FTransform& SensorTransf, FSemanticDetection& Detection) const
 {
     const FVector HitPoint = HitInfo.ImpactPoint;
     Detection.point = SensorTransf.Inverse().TransformPosition(HitPoint);
@@ -193,7 +193,7 @@ void ARayCastSemanticLidar::ComputeRawDetection(const FHitResult& HitInfo, const
 }
 
 
-bool ARayCastSemanticLidar::ShootLaser(const float VerticalAngle, const float HorizontalAngle, FHitResult& HitResult) const
+bool ACustomChannelRayCastSemanticLidar::ShootLaser(const float VerticalAngle, const float HorizontalAngle, FHitResult& HitResult) const
 {
   FCollisionQueryParams TraceParams = FCollisionQueryParams(FName(TEXT("Laser_Trace")), true, this);
   TraceParams.bTraceComplex = true;
